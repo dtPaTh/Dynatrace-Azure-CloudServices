@@ -9,11 +9,12 @@
 # function section
 # ==================================================
 
+$nl = [Environment]::NewLine
 function Log($content, $level) {
     if ($level -eq $null) {
         $level="LOG"
     }
-    Write-Host ("{0} {1} {2}" -f (Get-Date), $level, $content)
+    Write-Host ("{0} {1} {2} {3}" -f (Get-Date), $level, $content, $nl)
 }
 
 function LogDebug($content) {
@@ -118,9 +119,9 @@ catch
     LogInfo "Failed to read 'Dynatrace.ApiToken'" 
     ExitSuccess 
 }
-LogDebug "ApiToken $cfgApiToken"
+LogDebug "Api-Token $cfgApiToken"
 
-$cfgConnectionPoint = "http://{0}.live.dynatrace.com" -f $cfgEnvironmentID
+$cfgConnectionPoint = "https://{0}.live.dynatrace.com" -f $cfgEnvironmentID
 try { $cfgConnectionPoint = [Microsoft.WindowsAzure.ServiceRuntime.RoleEnvironment]::GetConfigurationSettingValue("Dynatrace.ConnectionPoint") }
 catch 
 { 
@@ -130,15 +131,18 @@ LogDebug "ConnectionPoint $cfgConnectionPoint"
 
 LogInfo "Configuration Complete."
 
+$authHeader = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+$authHeader.Add('Authorization',"Api-Token {0}" -f $cfgApiToken)
+
 # read connectioninfo
 try {
     LogInfo "Reading Manifest"
     
-    $manifestDownloadQuery = "{0}/api/v1/deployment/installer/agent/connectioninfo?Api-Token={1}" -f $cfgConnectionPoint, $cfgApiToken
+    $manifestDownloadQuery = "{0}/api/v1/deployment/installer/agent/connectioninfo" -f $cfgConnectionPoint
 
-    $manifest = Invoke-WebRequest $manifestDownloadQuery -UseBasicParsing | ConvertFrom-Json
-    $cfgAPIToken = $manifest.tenantToken
-    LogDebug "API-Token: $cfgAPIToken"
+    $manifest = Invoke-WebRequest $manifestDownloadQuery -Headers $authHeader -UseBasicParsing | ConvertFrom-Json
+    $tenantToken = $manifest.tenantToken
+    LogDebug "Tenant-Token: $tenantToken"
 
     $agentConnectionPoint = ""
     if ($manifest.communicationEndpoints -ne $null) {
@@ -153,8 +157,8 @@ try {
         $agentConnectionPoint = $env:DT_CONNECTION_POINT
     }
 
-    if ($cfgAPIToken -eq $null) {
-        throw "Invalid API-Token"
+    if ($tenantToken -eq $null) {
+        throw "Invalid Tenant-Token"
     }
 
     if ($agentConnectionPoint -eq "") {
@@ -170,11 +174,13 @@ try {
 
 try {
     $agentDownloadTarget =  "$startupTempPath\oneagent-installer.zip"
-    $agentDownloadQuery = "{0}/api/v1/deployment/installer/agent/windows/default-unattended/latest?Api-Token={1}" -f $cfgConnectionPoint, $cfgApiToken
+    $agentDownloadQuery = "{0}/api/v1/deployment/installer/agent/windows/default-unattended/latest" -f $cfgConnectionPoint
 
+	
     LogInfo "Downloading OneAgent..."
     LogDebug "$agentDownloadQuery -> $agentDownloadTarget"
-    Invoke-WebRequest $agentDownloadQuery -OutFile $agentDownloadTarget
+    Invoke-WebRequest $agentDownloadQuery -OutFile $agentDownloadTarget -Headers $authHeader
+
 } catch {
 	LogError "Failed to download OneAgent."
 	ExitSuccess
@@ -198,7 +204,7 @@ if (!(Test-Path $agentInstaller)) {
 
 try {
     
-    $exitCode =(Start-Process -FilePath "msiexec" -ArgumentList "/i $agentInstaller /qn SERVER=$agentConnectionPoint TENANT=$cfgEnvironmentID TENANT_TOKEN=$cfgAPIToken PROCESSHOOKING=1 APP_LOG_CONTENT_ACCESS=1" -NoNewWindow -Wait -Passthru).ExitCode
+    $exitCode =(Start-Process -FilePath "msiexec" -ArgumentList "/i $agentInstaller /qn SERVER=$agentConnectionPoint TENANT=$cfgEnvironmentID TENANT_TOKEN=$tenantToken PROCESSHOOKING=1 APP_LOG_CONTENT_ACCESS=1" -NoNewWindow -Wait -Passthru).ExitCode
     
     LogInfo "Installer finished with exit code: $exitCode"
 
