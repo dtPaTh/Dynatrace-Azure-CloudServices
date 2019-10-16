@@ -1,6 +1,6 @@
 # Dynatrace OneAgent on Azure CloudServices
 
-You can use Azure CloudService [https://docs.microsoft.com/en-us/azure/cloud-services/cloud-services-startup-tasks](Startup Tasks) to perform operations before a role starts. Using such a task you can run the OneAgent to get fullstack visibility into your Azure Cloud-Services. 
+You can use Azure CloudService [Startup Tasks](https://docs.microsoft.com/en-us/azure/cloud-services/cloud-services-startup-tasks) to perform operations before a role starts. Using such a task you can run the OneAgent to get fullstack visibility into your Azure Cloud-Services. 
 
 The following instructions provide scripts to download and run the Dynatrace OneAgent installer. The integration is the same for Web- and Workerroles.
 
