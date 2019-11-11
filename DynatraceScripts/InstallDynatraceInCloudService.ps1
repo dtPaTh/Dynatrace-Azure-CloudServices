@@ -125,7 +125,7 @@ $cfgConnectionPoint = "https://{0}.live.dynatrace.com" -f $cfgEnvironmentID
 try { $cfgConnectionPoint = [Microsoft.WindowsAzure.ServiceRuntime.RoleEnvironment]::GetConfigurationSettingValue("Dynatrace.ConnectionPoint") }
 catch 
 { 
-    LogInfo "Unable to read 'Dynatrace.ConnectionPoint', default to '$cfgConnectionPoint'" 
+    LogInfo "Unable to read 'Dynatrace.ConnectionPoint', using default endpoint for SaaS" 
 }
 LogDebug "ConnectionPoint $cfgConnectionPoint"
 
@@ -134,9 +134,9 @@ LogInfo "Configuration Complete."
 $authHeader = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $authHeader.Add('Authorization',"Api-Token {0}" -f $cfgApiToken)
 
-# read connectioninfo
+# Read connectioninfo
 try {
-    LogInfo "Reading Manifest"
+    LogInfo "Reading Manifest..."
     
     $manifestDownloadQuery = "{0}/api/v1/deployment/installer/agent/connectioninfo" -f $cfgConnectionPoint
 
@@ -170,11 +170,11 @@ try {
     ExitSuccess
 }
 
-# download
+# Download
 
 try {
-    $agentDownloadTarget =  "$startupTempPath\oneagent-installer.zip"
-    $agentDownloadQuery = "{0}/api/v1/deployment/installer/agent/windows/default-unattended/latest" -f $cfgConnectionPoint
+    $agentDownloadTarget =  "$startupTempPath\oneagent-installer.exe"
+    $agentDownloadQuery = "{0}/api/v1/deployment/installer/agent/windows/default/latest" -f $cfgConnectionPoint
 
 	
     LogInfo "Downloading OneAgent..."
@@ -182,17 +182,19 @@ try {
     Invoke-WebRequest $agentDownloadQuery -OutFile $agentDownloadTarget -Headers $authHeader
 
 } catch {
-	LogError "Failed to download OneAgent."
+	LogError "Failed to download OneAgent"
 	ExitSuccess
 }
 
-$agentInstallerTargetPath = "$startupTempPath\oneagent-latest"
+$agentInstallerTargetPath = $startupTempPath
 $agentInstaller = $null
 try {
-    Unzip $agentDownloadTarget $agentInstallerTargetPath
+    LogInfo "Extracting .msi..."
+    $exitCode =(Start-Process -FilePath $agentDownloadTarget -ArgumentList "--unpack-msi" -WorkingDirectory $agentInstallerTargetPath -NoNewWindow -Wait -Passthru).ExitCode
+    LogInfo "Installer finished with exit code: $exitCode"
 }
 catch {
-    LogError "Unable to extract download package."
+    LogError "Unable to extract .msi"
 	ExitSuccess
 }
 
